@@ -9,7 +9,7 @@
 CREATE TABLE blocks (
   rowid      BIGSERIAL PRIMARY KEY,
 
-  height     BIGINT NOT NULL,
+  height     BIGINT NOT NULL UNIQUE,
   chain_id   VARCHAR NOT NULL,
 
   -- When this block header was logged into the sink, in UTC.
@@ -28,13 +28,13 @@ CREATE TABLE tx_results (
   rowid BIGSERIAL PRIMARY KEY,
 
   -- The block to which this transaction belongs.
-  block_id BIGINT NOT NULL REFERENCES blocks(rowid),
+  block_id BIGINT NOT NULL REFERENCES blocks(height),
   -- The sequential index of the transaction within the block.
   index INTEGER NOT NULL,
   -- When this result record was logged into the sink, in UTC.
   created_at TIMESTAMPTZ NOT NULL,
   -- The hex-encoded hash of the transaction.
-  tx_hash VARCHAR NOT NULL,
+  tx_hash VARCHAR NOT NULL UNIQUE,
   -- The protobuf wire encoding of the TxResult message.
   tx_result BYTEA NOT NULL,
 
@@ -48,8 +48,8 @@ CREATE TABLE events (
 
   -- The block and transaction this event belongs to.
   -- If tx_id is NULL, this is a block event.
-  block_id BIGINT NOT NULL REFERENCES blocks(rowid),
-  tx_id    BIGINT NULL REFERENCES tx_results(rowid),
+  block_id BIGINT NOT NULL REFERENCES blocks(height),
+  tx_id    VARCHAR NULL REFERENCES tx_results(tx_hash),
 
   -- The application-defined type label for the event.
   type VARCHAR NOT NULL
@@ -74,12 +74,12 @@ CREATE VIEW event_attributes AS
 -- A joined view of all block events (those having tx_id NULL).
 CREATE VIEW block_events AS
   SELECT blocks.rowid as block_id, height, chain_id, type, key, composite_key, value
-  FROM blocks JOIN event_attributes ON (blocks.rowid = event_attributes.block_id)
+  FROM blocks JOIN event_attributes ON (blocks.height = event_attributes.block_id)
   WHERE event_attributes.tx_id IS NULL;
 
 -- A joined view of all transaction events.
 CREATE VIEW tx_events AS
   SELECT height, index, chain_id, type, key, composite_key, value, tx_results.created_at
-  FROM blocks JOIN tx_results ON (blocks.rowid = tx_results.block_id)
-  JOIN event_attributes ON (tx_results.rowid = event_attributes.tx_id)
+  FROM blocks JOIN tx_results ON (blocks.height = tx_results.block_id)
+  JOIN event_attributes ON (tx_results.tx_hash = event_attributes.tx_id)
   WHERE event_attributes.tx_id IS NOT NULL;

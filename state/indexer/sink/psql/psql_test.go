@@ -1,6 +1,7 @@
 package psql
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"flag"
@@ -13,7 +14,7 @@ import (
 	"time"
 
 	"github.com/adlio/schema"
-	"github.com/gogo/protobuf/proto"
+	"github.com/gogo/protobuf/jsonpb"
 	"github.com/ory/dockertest"
 	"github.com/ory/dockertest/docker"
 	"github.com/stretchr/testify/assert"
@@ -267,6 +268,8 @@ func txResultWithEvents(events []abci.Event) *abci.TxResult {
 	}
 }
 
+var jsonpbUnmarshaller = jsonpb.Unmarshaler{}
+
 func loadTxResult(hash []byte) (*abci.TxResult, error) {
 	hashString := fmt.Sprintf("%X", hash)
 	var resultData []byte
@@ -277,7 +280,8 @@ SELECT tx_result FROM `+tableTxResults+` WHERE tx_hash = $1;
 	}
 
 	txr := new(abci.TxResult)
-	if err := proto.Unmarshal(resultData, txr); err != nil {
+	reader := bytes.NewBuffer(resultData)
+	if err := jsonpbUnmarshaller.Unmarshal(reader, txr); err != nil {
 		return nil, fmt.Errorf("unmarshaling txr: %v", err)
 	}
 
