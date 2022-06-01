@@ -86,7 +86,7 @@ func queryWithID(tx *sql.Tx, query string, args ...interface{}) (uint32, error) 
 func insertEvents(dbtx *sql.Tx, blockID int64, txID string, evts []abci.Event) error {
 	// Populate the transaction ID field iff one is defined (> 0).
 	var txIDArg interface{}
-	if txID == "" {
+	if txID != "" {
 		txIDArg = txID
 	}
 
