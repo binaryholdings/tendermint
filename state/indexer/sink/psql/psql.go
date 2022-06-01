@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
+	"github.com/gogo/protobuf/jsonpb"
 
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/libs/pubsub/query"
@@ -83,10 +83,10 @@ func queryWithID(tx *sql.Tx, query string, args ...interface{}) (uint32, error) 
 //
 // If txID > 0, the event is attributed to the Tendermint transaction with that
 // ID; otherwise it is recorded as a block event.
-func insertEvents(dbtx *sql.Tx, blockID, txID uint32, evts []abci.Event) error {
+func insertEvents(dbtx *sql.Tx, blockID int64, txID string, evts []abci.Event) error {
 	// Populate the transaction ID field iff one is defined (> 0).
 	var txIDArg interface{}
-	if txID > 0 {
+	if txID == "" {
 		txIDArg = txID
 	}
 
@@ -145,7 +145,7 @@ func (es *EventSink) IndexBlockEvents(h types.EventDataNewBlockHeader) error {
 	return runInTransaction(es.store, func(dbtx *sql.Tx) error {
 		// Add the block to the blocks table and report back its row ID for use
 		// in indexing the events for the block.
-		blockID, err := queryWithID(dbtx, `
+		_, err := queryWithID(dbtx, `
 INSERT INTO `+tableBlocks+` (height, chain_id, created_at)
   VALUES ($1, $2, $3)
   ON CONFLICT DO NOTHING
@@ -158,28 +158,35 @@ INSERT INTO `+tableBlocks+` (height, chain_id, created_at)
 		}
 
 		// Insert the special block meta-event for height.
-		if err := insertEvents(dbtx, blockID, 0, []abci.Event{
+		if err := insertEvents(dbtx, h.Header.Height, "", []abci.Event{
 			makeIndexedEvent(types.BlockHeightKey, fmt.Sprint(h.Header.Height)),
 		}); err != nil {
 			return fmt.Errorf("block meta-events: %w", err)
 		}
 		// Insert all the block events. Order is important here,
-		if err := insertEvents(dbtx, blockID, 0, h.ResultBeginBlock.Events); err != nil {
+		if err := insertEvents(dbtx, h.Header.Height, "", h.ResultBeginBlock.Events); err != nil {
 			return fmt.Errorf("begin-block events: %w", err)
 		}
-		if err := insertEvents(dbtx, blockID, 0, h.ResultEndBlock.Events); err != nil {
+		if err := insertEvents(dbtx, h.Header.Height, "", h.ResultEndBlock.Events); err != nil {
 			return fmt.Errorf("end-block events: %w", err)
 		}
 		return nil
 	})
 }
 
+var (
+	jsonpbMarshaller = jsonpb.Marshaler{
+		EnumsAsInts:  true,
+		EmitDefaults: true,
+	}
+)
+
 func (es *EventSink) IndexTxEvents(txrs []*abci.TxResult) error {
 	ts := time.Now().UTC()
 
 	for _, txr := range txrs {
 		// Encode the result message in protobuf wire format for indexing.
-		resultData, err := proto.Marshal(txr)
+		resultData, err := jsonpbMarshaller.MarshalToString(txr)
 		if err != nil {
 			return fmt.Errorf("marshaling tx_result: %w", err)
 		}
@@ -190,7 +197,7 @@ func (es *EventSink) IndexTxEvents(txrs []*abci.TxResult) error {
 		if err := runInTransaction(es.store, func(dbtx *sql.Tx) error {
 			// Find the block associated with this transaction. The block header
 			// must have been indexed prior to the transactions belonging to it.
-			blockID, err := queryWithID(dbtx, `
+			_, err := queryWithID(dbtx, `
 SELECT rowid FROM `+tableBlocks+` WHERE height = $1 AND chain_id = $2;
 `, txr.Height, es.chainID)
 			if err != nil {
@@ -198,12 +205,12 @@ SELECT rowid FROM `+tableBlocks+` WHERE height = $1 AND chain_id = $2;
 			}
 
 			// Insert a record for this tx_result and capture its ID for indexing events.
-			txID, err := queryWithID(dbtx, `
+			_, err = queryWithID(dbtx, `
 INSERT INTO `+tableTxResults+` (block_id, index, created_at, tx_hash, tx_result)
   VALUES ($1, $2, $3, $4, $5)
   ON CONFLICT DO NOTHING
   RETURNING rowid;
-`, blockID, txr.Index, ts, txHash, resultData)
+`, txr.Height, txr.Index, ts, txHash, resultData)
 			if err == sql.ErrNoRows {
 				return nil // we already saw this transaction; quietly succeed
 			} else if err != nil {
@@ -211,14 +218,14 @@ INSERT INTO `+tableTxResults+` (block_id, index, created_at, tx_hash, tx_result)
 			}
 
 			// Insert the special transaction meta-events for hash and height.
-			if err := insertEvents(dbtx, blockID, txID, []abci.Event{
+			if err := insertEvents(dbtx, txr.Height, txHash, []abci.Event{
 				makeIndexedEvent(types.TxHashKey, txHash),
 				makeIndexedEvent(types.TxHeightKey, fmt.Sprint(txr.Height)),
 			}); err != nil {
 				return fmt.Errorf("indexing transaction meta-events: %w", err)
 			}
 			// Index any events packaged with the transaction.
-			if err := insertEvents(dbtx, blockID, txID, txr.Result.Events); err != nil {
+			if err := insertEvents(dbtx, txr.Height, txHash, txr.Result.Events); err != nil {
 				return fmt.Errorf("indexing transaction events: %w", err)
 			}
 			return nil
