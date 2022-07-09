@@ -44,7 +44,7 @@ func NewEventSink(projectID, topic, chainID string) (*EventSink, error) {
 	if s := os.Getenv(credsEnvVar); len(s) == 0 {
 		return nil, fmt.Errorf("missing '%s' environment variable", credsEnvVar)
 	}
-
+	fmt.Println("started pubsub")
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
@@ -62,6 +62,7 @@ func NewEventSink(projectID, topic, chainID string) (*EventSink, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to check for topic '%s': %w", topic, err)
 	}
+	fmt.Println(topic)
 	if !ok {
 		ctx, cancel = context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
@@ -87,7 +88,7 @@ func NewEventSink(projectID, topic, chainID string) (*EventSink, error) {
 func (es *EventSink) IndexBlock(h types.EventDataNewBlockHeader) error {
 	buf := new(bytes.Buffer)
 	blockHeightStr := strconv.Itoa(int(h.Header.Height))
-
+	fmt.Println("indexing block")
 	// publish BeginBlock Events
 	if err := jsonpbMarshaller.Marshal(buf, &h.ResultBeginBlock); err != nil {
 		return fmt.Errorf("failed to JSON marshal ResultBeginBlock: %w", err)
@@ -134,7 +135,7 @@ func (es *EventSink) IndexBlock(h types.EventDataNewBlockHeader) error {
 			return fmt.Errorf("failed to publish pubsub message: %w", err)
 		}
 	}
-
+	fmt.Println("indexed block")
 	return nil
 }
 
