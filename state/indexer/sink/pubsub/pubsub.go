@@ -22,11 +22,12 @@ const (
 	AttrKeyBlockHeight = "block_height"
 	AttrKeyTxHash      = "tx_hash"
 
-	MsgType           = "message_type"
-	MsgTypeBeginBlock = "begin_block"
-	MsgTypeEndBlock   = "end_block"
-	MsgTypeTxResult   = "tx_result"
-	MsgTypeTxEvents   = "tx_events"
+	MsgType            = "message_type"
+	MsgTypeBeginBlock  = "begin_block"
+	MsgTypeBlockHeader = "header"
+	MsgTypeEndBlock    = "end_block"
+	MsgTypeTxResult    = "tx_result"
+	MsgTypeTxEvents    = "tx_events"
 )
 
 var jsonpbMarshaller = jsonpb.Marshaler{
@@ -88,18 +89,38 @@ func NewEventSink(projectID, topic, chainID string) (*EventSink, error) {
 func (es *EventSink) IndexBlock(h types.EventDataNewBlockHeader) error {
 	buf := new(bytes.Buffer)
 	blockHeightStr := strconv.Itoa(int(h.Header.Height))
-	fmt.Println("indexing block")
-	// publish BeginBlock Events
-	if err := jsonpbMarshaller.Marshal(buf, &h.ResultBeginBlock); err != nil {
-		return fmt.Errorf("failed to JSON marshal ResultBeginBlock: %w", err)
-	}
 
 	var results []*pubsub.PublishResult
+
+	// publish block header
+	if err := jsonpbMarshaller.Marshal(buf, h.Header.ToProto()); err != nil {
+		return fmt.Errorf("failed to JSON marshal Header: %w", err)
+	}
 
 	res := es.topic.Publish(
 		context.Background(), // NOTE: contexts aren't used in Publish
 		&pubsub.Message{
 			Data: buf.Bytes(),
+			Attributes: map[string]string{
+				MsgType:            MsgTypeBlockHeader,
+				AttrKeyChainID:     es.chainID,
+				AttrKeyBlockHeight: blockHeightStr,
+			},
+		},
+	)
+	results = append(results, res)
+
+	buf1 := new(bytes.Buffer)
+
+	// publish BeginBlock Events
+	if err := jsonpbMarshaller.Marshal(buf1, &h.ResultBeginBlock); err != nil {
+		return fmt.Errorf("failed to JSON marshal ResultBeginBlock: %w", err)
+	}
+
+	res = es.topic.Publish(
+		context.Background(), // NOTE: contexts aren't used in Publish
+		&pubsub.Message{
+			Data: buf1.Bytes(),
 			Attributes: map[string]string{
 				MsgType:            MsgTypeBeginBlock,
 				AttrKeyChainID:     es.chainID,
@@ -109,17 +130,18 @@ func (es *EventSink) IndexBlock(h types.EventDataNewBlockHeader) error {
 	)
 	results = append(results, res)
 
-	buf.Reset() // reset buffer prior to next Marshal call
+	// buf.Reset() // reset buffer prior to next Marshal call
+	buf2 := new(bytes.Buffer)
 
 	// publish EndBlock Events
-	if err := jsonpbMarshaller.Marshal(buf, &h.ResultEndBlock); err != nil {
+	if err := jsonpbMarshaller.Marshal(buf2, &h.ResultEndBlock); err != nil {
 		return fmt.Errorf("failed to JSON marshal ResultEndBlock: %w", err)
 	}
 
 	res = es.topic.Publish(
 		context.Background(), // NOTE: contexts aren't used in Publish
 		&pubsub.Message{
-			Data: buf.Bytes(),
+			Data: buf2.Bytes(),
 			Attributes: map[string]string{
 				MsgType:            MsgTypeEndBlock,
 				AttrKeyChainID:     es.chainID,
@@ -140,11 +162,11 @@ func (es *EventSink) IndexBlock(h types.EventDataNewBlockHeader) error {
 }
 
 func (es *EventSink) IndexTxs(txrs []*abci.TxResult) error {
-	buf := new(bytes.Buffer)
 
 	results := make([]*pubsub.PublishResult, len(txrs))
 	for i, txr := range txrs {
-		buf.Reset() // reset buffer prior to next Marshal call
+		buf := new(bytes.Buffer)
+		// buf.Reset() // reset buffer prior to next Marshal call
 
 		blockHeightStr := strconv.Itoa(int(txr.Height))
 		txHash := fmt.Sprintf("%X", types.Tx(txr.Tx).Hash())
