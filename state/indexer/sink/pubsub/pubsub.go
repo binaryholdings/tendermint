@@ -88,13 +88,33 @@ func NewEventSink(projectID, topic, chainID string) (*EventSink, error) {
 func (es *EventSink) IndexBlock(h types.EventDataNewBlockHeader) error {
 	buf := new(bytes.Buffer)
 	blockHeightStr := strconv.Itoa(int(h.Header.Height))
-	fmt.Println("indexing block")
+
+	var results []*pubsub.PublishResult
+
+	// publish block header
+	if err := jsonpbMarshaller.Marshal(buf, &h.Header.ToProto()); err != nil {
+		return fmt.Errorf("failed to JSON marshal ResultBeginBlock: %w", err)
+	}
+
+	res := es.topic.Publish(
+		context.Background(), // NOTE: contexts aren't used in Publish
+		&pubsub.Message{
+			Data: buf.Bytes(),
+			Attributes: map[string]string{
+				MsgType:            MsgTypeBeginBlock,
+				AttrKeyChainID:     es.chainID,
+				AttrKeyBlockHeight: blockHeightStr,
+			},
+		},
+	)
+	results = append(results, res)
+
+	buf.Reset()
+
 	// publish BeginBlock Events
 	if err := jsonpbMarshaller.Marshal(buf, &h.ResultBeginBlock); err != nil {
 		return fmt.Errorf("failed to JSON marshal ResultBeginBlock: %w", err)
 	}
-
-	var results []*pubsub.PublishResult
 
 	res := es.topic.Publish(
 		context.Background(), // NOTE: contexts aren't used in Publish
