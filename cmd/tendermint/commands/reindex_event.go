@@ -70,17 +70,18 @@ either or both arguments.
 				return fmt.Errorf("%s: %w", reindexFailed, err)
 			}
 
-			es, err := loadEventSinks(conf)
+			bi, ti, err := loadEventSinks(conf)
 			if err != nil {
 				return fmt.Errorf("%s: %w", reindexFailed, err)
 			}
 
 			riArgs := eventReIndexArgs{
-				startHeight: startHeight,
-				endHeight:   endHeight,
-				sinks:       es,
-				blockStore:  bs,
-				stateStore:  ss,
+				startHeight:  startHeight,
+				endHeight:    endHeight,
+				blockIndexer: bi,
+				txIndexer:    ti,
+				blockStore:   bs,
+				stateStore:   ss,
 			}
 			if err := eventReIndex(cmd, riArgs); err != nil {
 				return fmt.Errorf("%s: %w", reindexFailed, err)
@@ -96,50 +97,49 @@ either or both arguments.
 	return cmd
 }
 
-func loadEventSinks(cfg *tmcfg.Config) ([]txindex.TxIndexer, error) {
+func loadEventSinks(cfg *tmcfg.Config) ([]indexer.BlockIndexer, []txindex.TxIndexer, error) {
 	// Check duplicated sinks.
 	sinks := map[string]bool{}
 	for _, s := range cfg.TxIndex.Indexer {
-		sl := strings.ToLower(s)
+		sl := strings.ToLower(string(s))
 		if sinks[sl] {
-			return nil, errors.New("found duplicated sinks, please check the tx-index section in the config.toml")
+			return nil, nil, errors.New("found duplicated sinks, please check the tx-index section in the config.toml")
 		}
 		sinks[sl] = true
 	}
 
-	eventSinks := []indexer.BlockIndexer{}
+	blockIndexer := []indexer.BlockIndexer{}
+	txIndexer := []txindex.TxIndexer{}
 
 	for k := range sinks {
 		switch k {
 		case "null":
-			return nil, errors.New("found null event sink, please check the tx-index section in the config.toml")
+			return nil, nil, errors.New("found null event sink, please check the tx-index section in the config.toml")
 		case "psql":
 			conn := cfg.TxIndex.PsqlConn
 			if conn == "" {
-				return nil, errors.New("the psql connection settings cannot be empty")
+				return nil, nil, errors.New("the psql connection settings cannot be empty")
 			}
 			es, err := psql.NewEventSink(conn, cfg.ChainID())
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
-			eventSinks = append(eventSinks, es)
+
+			blockIndexer = append(blockIndexer, es.BlockIndexer())
+			txIndexer = append(txIndexer, es.TxIndexer())
 		case "pubsub":
 			es, err := pubsub.NewEventSink(cfg.TxIndex.PubsubProjectID, cfg.TxIndex.PubsubTopic, cfg.ChainID())
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
-			eventSinks = append(eventSinks, es)
+			blockIndexer = append(blockIndexer, pubsub.NewBlockIndexer(es))
+			txIndexer = append(txIndexer, pubsub.NewTxIndexer(es))
 		default:
-			return nil, errors.New("unsupported event sink type")
+			return nil, nil, errors.New("unsupported event sink type")
 		}
 	}
 
-	if len(eventSinks) == 0 {
-		return nil, errors.New("no proper event sink can do event re-indexing," +
-			" please check the tx-index section in the config.toml")
-	}
-
-	return eventSinks, nil
+	return blockIndexer, txIndexer, nil
 }
 
 func loadStores(cfg *tmcfg.Config) (*store.BlockStore, state.Store, error) {
@@ -171,11 +171,12 @@ func loadStores(cfg *tmcfg.Config) (*store.BlockStore, state.Store, error) {
 }
 
 type eventReIndexArgs struct {
-	startHeight int64
-	endHeight   int64
-	sinks       []indexer.EventSink
-	blockStore  state.BlockStore
-	stateStore  state.Store
+	startHeight  int64
+	endHeight    int64
+	blockIndexer []indexer.BlockIndexer
+	txIndexer    []txindex.TxIndexer
+	blockStore   state.BlockStore
+	stateStore   state.Store
 }
 
 func eventReIndex(cmd *cobra.Command, args eventReIndexArgs) error {
@@ -194,40 +195,42 @@ func eventReIndex(cmd *cobra.Command, args eventReIndexArgs) error {
 				return fmt.Errorf("not able to load block at height %d from the blockstore", i)
 			}
 
-			r, err := args.stateStore.LoadFinalizeBlockResponses(i)
+			r, err := args.stateStore.LoadABCIResponses(i)
 			if err != nil {
 				return fmt.Errorf("not able to load ABCI Response at height %d from the statestore", i)
 			}
 
 			e := types.EventDataNewBlockHeader{
-				Header:              b.Header,
-				NumTxs:              int64(len(b.Txs)),
-				ResultFinalizeBlock: *r,
+				Header:           b.Header,
+				NumTxs:           int64(len(b.Txs)),
+				ResultBeginBlock: *r.BeginBlock,
+				ResultEndBlock:   *r.EndBlock,
 			}
 
-			var batch *indexer.Batch
+			var batch *txindex.Batch
 			if e.NumTxs > 0 {
-				batch = indexer.NewBatch(e.NumTxs)
+				batch = txindex.NewBatch(e.NumTxs)
 
 				for i := range b.Data.Txs {
 					tr := abcitypes.TxResult{
 						Height: b.Height,
 						Index:  uint32(i),
 						Tx:     b.Data.Txs[i],
-						Result: *(r.TxResults[i]),
+						Result: *(r.DeliverTxs[i]),
 					}
 
 					_ = batch.Add(&tr)
 				}
 			}
 
-			for _, sink := range args.sinks {
-				if err := sink.IndexBlockEvents(e); err != nil {
+			for _, sink := range args.blockIndexer {
+				if err := sink.Index(e); err != nil {
 					return fmt.Errorf("block event re-index at height %d failed: %w", i, err)
 				}
-
+			}
+			for _, sink := range args.txIndexer {
 				if batch != nil {
-					if err := sink.IndexTxEvents(batch.Ops); err != nil {
+					if err := sink.AddBatch(batch); err != nil {
 						return fmt.Errorf("tx event re-index at height %d failed: %w", i, err)
 					}
 				}
