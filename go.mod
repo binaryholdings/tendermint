@@ -3,8 +3,6 @@ module github.com/tendermint/tendermint
 go 1.16
 
 require (
-	cloud.google.com/go/iam v0.3.0 // indirect
-	cloud.google.com/go/kms v1.4.0 // indirect
 	cloud.google.com/go/pubsub v1.23.1
 	github.com/BurntSushi/toml v1.1.0
 	github.com/ChainSafe/go-schnorrkel v0.0.0-20200405005733-88cbf1b4c40d
@@ -39,6 +37,6 @@ require (
 	github.com/stretchr/testify v1.7.2
 	github.com/tendermint/tm-db v0.6.6
 	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4
-	golang.org/x/net v0.0.0-20220520000938-2e3eb7b945c2
+	golang.org/x/net v0.0.0-20220617184016-355a448f1bc9
 	google.golang.org/grpc v1.47.0
 )
