@@ -131,7 +131,7 @@ func loadEventSinks(cfg *tmcfg.Config) ([]indexer.BlockIndexer, []txindex.TxInde
 			blockIndexer = append(blockIndexer, pubsub.NewBlockIndexer(es))
 			txIndexer = append(txIndexer, pubsub.NewTxIndexer(es))
 		default:
-			return nil, nil, errors.New("unsupported event sink type")
+			return nil, nil, fmt.Errorf("unsupported event sink type: %s", k)
 		}
 	}
 
