@@ -6,17 +6,15 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	dbm "github.com/tendermint/tm-db"
 
 	abcitypes "github.com/tendermint/tendermint/abci/types"
 	tmcfg "github.com/tendermint/tendermint/config"
 	"github.com/tendermint/tendermint/libs/progressbar"
 	"github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/state/indexer"
-	blockidxkv "github.com/tendermint/tendermint/state/indexer/block/kv"
 	"github.com/tendermint/tendermint/state/indexer/sink/psql"
+	"github.com/tendermint/tendermint/state/indexer/sink/pubsub"
 	"github.com/tendermint/tendermint/state/txindex"
-	"github.com/tendermint/tendermint/state/txindex/kv"
 	"github.com/tendermint/tendermint/types"
 )
 
@@ -105,15 +103,14 @@ func loadEventSinks(cfg *tmcfg.Config) (indexer.BlockIndexer, txindex.TxIndexer,
 			return nil, nil, err
 		}
 		return es.BlockIndexer(), es.TxIndexer(), nil
-	case "kv":
-		store, err := dbm.NewDB("tx_index", dbm.BackendType(cfg.DBBackend), cfg.DBDir())
+
+	case "pubsub":
+		es, err := pubsub.NewEventSink(cfg.TxIndex.PubsubProjectID, cfg.TxIndex.PubsubTopic, cfg.ChainID())
 		if err != nil {
 			return nil, nil, err
 		}
 
-		txIndexer := kv.NewTxIndex(store)
-		blockIndexer := blockidxkv.New(dbm.NewPrefixDB(store, []byte("block_events")))
-		return blockIndexer, txIndexer, nil
+		return pubsub.NewBlockIndexer(es), pubsub.NewTxIndexer(es), nil
 	default:
 		return nil, nil, fmt.Errorf("unsupported event sink type: %s", cfg.TxIndex.Indexer)
 	}
