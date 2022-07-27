@@ -3,10 +3,7 @@ package commands
 import (
 	"errors"
 	"fmt"
-<<<<<<< HEAD
 	"path/filepath"
-=======
->>>>>>> 46badfabd9d5491c78283a0ecdeb695e21785508
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -14,16 +11,6 @@ import (
 
 	abcitypes "github.com/tendermint/tendermint/abci/types"
 	tmcfg "github.com/tendermint/tendermint/config"
-<<<<<<< HEAD
-	"github.com/tendermint/tendermint/libs/os"
-	"github.com/tendermint/tendermint/libs/progressbar"
-	"github.com/tendermint/tendermint/state"
-	"github.com/tendermint/tendermint/state/indexer"
-	"github.com/tendermint/tendermint/state/indexer/sink/psql"
-	"github.com/tendermint/tendermint/state/indexer/sink/pubsub"
-	"github.com/tendermint/tendermint/state/txindex"
-	"github.com/tendermint/tendermint/store"
-=======
 	"github.com/tendermint/tendermint/libs/progressbar"
 	"github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/state/indexer"
@@ -31,7 +18,6 @@ import (
 	"github.com/tendermint/tendermint/state/indexer/sink/psql"
 	"github.com/tendermint/tendermint/state/txindex"
 	"github.com/tendermint/tendermint/state/txindex/kv"
->>>>>>> 46badfabd9d5491c78283a0ecdeb695e21785508
 	"github.com/tendermint/tendermint/types"
 )
 
@@ -44,11 +30,7 @@ var (
 	ErrInvalidRequest     = errors.New("invalid request")
 )
 
-<<<<<<< HEAD
-// MakeReindexEventCommand constructs a command to re-index events in a block height interval.
-=======
 // ReIndexEventCmd constructs a command to re-index events in a block height interval.
->>>>>>> 46badfabd9d5491c78283a0ecdeb695e21785508
 var ReIndexEventCmd = &cobra.Command{
 	Use:   "reindex-event",
 	Short: "reindex events to the event store backends",
