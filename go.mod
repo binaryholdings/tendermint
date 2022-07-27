@@ -44,6 +44,9 @@ require (
 )
 
 require (
+	cloud.google.com/go/iam v0.3.0 // indirect
+	cloud.google.com/go/kms v1.4.0 // indirect
+	cloud.google.com/go/pubsub v1.5.0
 	github.com/bufbuild/buf v1.4.0
 	github.com/creachadair/taskgroup v0.3.2
 	github.com/golangci/golangci-lint v1.47.2
