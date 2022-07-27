@@ -3,7 +3,10 @@ package commands
 import (
 	"errors"
 	"fmt"
+<<<<<<< HEAD
 	"path/filepath"
+=======
+>>>>>>> 46badfabd9d5491c78283a0ecdeb695e21785508
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -11,6 +14,7 @@ import (
 
 	abcitypes "github.com/tendermint/tendermint/abci/types"
 	tmcfg "github.com/tendermint/tendermint/config"
+<<<<<<< HEAD
 	"github.com/tendermint/tendermint/libs/os"
 	"github.com/tendermint/tendermint/libs/progressbar"
 	"github.com/tendermint/tendermint/state"
@@ -19,6 +23,15 @@ import (
 	"github.com/tendermint/tendermint/state/indexer/sink/pubsub"
 	"github.com/tendermint/tendermint/state/txindex"
 	"github.com/tendermint/tendermint/store"
+=======
+	"github.com/tendermint/tendermint/libs/progressbar"
+	"github.com/tendermint/tendermint/state"
+	"github.com/tendermint/tendermint/state/indexer"
+	blockidxkv "github.com/tendermint/tendermint/state/indexer/block/kv"
+	"github.com/tendermint/tendermint/state/indexer/sink/psql"
+	"github.com/tendermint/tendermint/state/txindex"
+	"github.com/tendermint/tendermint/state/txindex/kv"
+>>>>>>> 46badfabd9d5491c78283a0ecdeb695e21785508
 	"github.com/tendermint/tendermint/types"
 )
 
@@ -31,7 +44,11 @@ var (
 	ErrInvalidRequest     = errors.New("invalid request")
 )
 
+<<<<<<< HEAD
 // MakeReindexEventCommand constructs a command to re-index events in a block height interval.
+=======
+// ReIndexEventCmd constructs a command to re-index events in a block height interval.
+>>>>>>> 46badfabd9d5491c78283a0ecdeb695e21785508
 var ReIndexEventCmd = &cobra.Command{
 	Use:   "reindex-event",
 	Short: "reindex events to the event store backends",
@@ -93,84 +110,39 @@ func init() {
 	ReIndexEventCmd.Flags().Int64Var(&endHeight, "end-height", 0, "the block height would like to finish for re-index")
 }
 
-func loadEventSinks(cfg *tmcfg.Config) ([]indexer.BlockIndexer, []txindex.TxIndexer, error) {
-	// Check duplicated sinks.
-	sinks := map[string]bool{}
-	for _, s := range cfg.TxIndex.Indexer {
-		sl := strings.ToLower(string(s))
-		if sinks[sl] {
-			return nil, nil, errors.New("found duplicated sinks, please check the tx-index section in the config.toml")
+func loadEventSinks(cfg *tmcfg.Config) (indexer.BlockIndexer, txindex.TxIndexer, error) {
+	switch strings.ToLower(cfg.TxIndex.Indexer) {
+	case "null":
+		return nil, nil, errors.New("found null event sink, please check the tx-index section in the config.toml")
+	case "psql":
+		conn := cfg.TxIndex.PsqlConn
+		if conn == "" {
+			return nil, nil, errors.New("the psql connection settings cannot be empty")
 		}
-		sinks[sl] = true
-	}
-
-	blockIndexer := []indexer.BlockIndexer{}
-	txIndexer := []txindex.TxIndexer{}
-
-	for k := range sinks {
-		switch k {
-		case "null":
-			return nil, nil, errors.New("found null event sink, please check the tx-index section in the config.toml")
-		case "psql":
-			conn := cfg.TxIndex.PsqlConn
-			if conn == "" {
-				return nil, nil, errors.New("the psql connection settings cannot be empty")
-			}
-			es, err := psql.NewEventSink(conn, cfg.ChainID())
-			if err != nil {
-				return nil, nil, err
-			}
-
-			blockIndexer = append(blockIndexer, es.BlockIndexer())
-			txIndexer = append(txIndexer, es.TxIndexer())
-		case "pubsub":
-			es, err := pubsub.NewEventSink(cfg.TxIndex.PubsubProjectID, cfg.TxIndex.PubsubTopic, cfg.ChainID())
-			if err != nil {
-				return nil, nil, err
-			}
-			blockIndexer = append(blockIndexer, pubsub.NewBlockIndexer(es))
-			txIndexer = append(txIndexer, pubsub.NewTxIndexer(es))
-		default:
-			return nil, nil, fmt.Errorf("unsupported event sink type: %s", k)
+		es, err := psql.NewEventSink(conn, cfg.ChainID())
+		if err != nil {
+			return nil, nil, err
 		}
+		return es.BlockIndexer(), es.TxIndexer(), nil
+	case "kv":
+		store, err := dbm.NewDB("tx_index", dbm.BackendType(cfg.DBBackend), cfg.DBDir())
+		if err != nil {
+			return nil, nil, err
+		}
+
+		txIndexer := kv.NewTxIndex(store)
+		blockIndexer := blockidxkv.New(dbm.NewPrefixDB(store, []byte("block_events")))
+		return blockIndexer, txIndexer, nil
+	default:
+		return nil, nil, fmt.Errorf("unsupported event sink type: %s", cfg.TxIndex.Indexer)
 	}
-
-	return blockIndexer, txIndexer, nil
-}
-
-func loadStores(cfg *tmcfg.Config) (*store.BlockStore, state.Store, error) {
-	dbType := dbm.BackendType(cfg.DBBackend)
-
-	if !os.FileExists(filepath.Join(cfg.DBDir(), "blockstore.db")) {
-		return nil, nil, fmt.Errorf("no blockstore found in %v", cfg.DBDir())
-	}
-
-	// Get BlockStore
-	blockStoreDB, err := dbm.NewDB("blockstore", dbType, cfg.DBDir())
-	if err != nil {
-		return nil, nil, err
-	}
-	blockStore := store.NewBlockStore(blockStoreDB)
-
-	if !os.FileExists(filepath.Join(cfg.DBDir(), "state.db")) {
-		return nil, nil, fmt.Errorf("no blockstore found in %v", cfg.DBDir())
-	}
-
-	// Get StateStore
-	stateDB, err := dbm.NewDB("state", dbType, cfg.DBDir())
-	if err != nil {
-		return nil, nil, err
-	}
-	stateStore := state.NewStore(stateDB)
-
-	return blockStore, stateStore, nil
 }
 
 type eventReIndexArgs struct {
 	startHeight  int64
 	endHeight    int64
-	blockIndexer []indexer.BlockIndexer
-	txIndexer    []txindex.TxIndexer
+	blockIndexer indexer.BlockIndexer
+	txIndexer    txindex.TxIndexer
 	blockStore   state.BlockStore
 	stateStore   state.Store
 }
@@ -215,21 +187,18 @@ func eventReIndex(cmd *cobra.Command, args eventReIndexArgs) error {
 						Result: *(r.DeliverTxs[i]),
 					}
 
-					_ = batch.Add(&tr)
+					if err = batch.Add(&tr); err != nil {
+						return fmt.Errorf("adding tx to batch: %w", err)
+					}
+				}
+
+				if err := args.txIndexer.AddBatch(batch); err != nil {
+					return fmt.Errorf("tx event re-index at height %d failed: %w", i, err)
 				}
 			}
 
-			for _, sink := range args.blockIndexer {
-				if err := sink.Index(e); err != nil {
-					return fmt.Errorf("block event re-index at height %d failed: %w", i, err)
-				}
-			}
-			for _, sink := range args.txIndexer {
-				if batch != nil {
-					if err := sink.AddBatch(batch); err != nil {
-						return fmt.Errorf("tx event re-index at height %d failed: %w", i, err)
-					}
-				}
+			if err := args.blockIndexer.Index(e); err != nil {
+				return fmt.Errorf("block event re-index at height %d failed: %w", i, err)
 			}
 		}
 
