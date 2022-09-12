@@ -172,7 +172,7 @@ func eventReIndex(cmd *cobra.Command, args eventReIndexArgs) error {
 						return fmt.Errorf("adding tx to batch: %w", err)
 					}
 				}
-
+				fmt.Println(batch.Size())
 				if err := args.txIndexer.AddBatch(batch); err != nil {
 					return fmt.Errorf("tx event re-index at height %d failed: %w", i, err)
 				}
