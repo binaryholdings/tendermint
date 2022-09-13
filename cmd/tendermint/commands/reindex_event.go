@@ -180,7 +180,7 @@ func eventReIndex(cmd *cobra.Command, args eventReIndexArgs) error {
 			fmt.Println(e.ResultEndBlock.Size(), e.ResultBeginBlock.Size(), e.NumTxs)
 			if err := args.blockIndexer.Index(e); err != nil {
 				fmt.Printf("block event re-index at height %d failed: %s", i, err)
-				return nil
+				continue
 			}
 		}
 
