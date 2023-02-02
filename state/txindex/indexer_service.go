@@ -70,11 +70,11 @@ func (is *IndexerService) OnStart() error {
 				txResult := msg2.Data().(types.EventDataTx).TxResult
 
 				pt := pubsub.TxResult{
-					Height: height,
-					Index:  txResult.Index,
-					Tx:     txResult.Tx,
-					Result: txResult.Result,
-					Time:   eventDataHeader.Header.Time,
+					Height:         height,
+					Index:          txResult.Index,
+					Tx:             txResult.Tx,
+					Result:         txResult.Result,
+					BlockTimestamp: eventDataHeader.Header.Time,
 				}
 
 				if err = batch.Add(&pt); err != nil {

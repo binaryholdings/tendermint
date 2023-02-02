@@ -810,6 +810,8 @@ github.com/numiadata/tools/pubsub v0.0.0-20230131234847-33653041071c h1:C52IBBSB
 github.com/numiadata/tools/pubsub v0.0.0-20230131234847-33653041071c/go.mod h1:B5tG69jf27ORMtjJY5Q50s6HAtmVTWCpOoRQgEWheEQ=
 github.com/numiadata/tools/pubsub v0.0.0-20230131235318-730f0225f65f h1:OC7N1qAHaFCd4LIjp2hQXE6xJbW4NwMHU2eElixm7Gg=
 github.com/numiadata/tools/pubsub v0.0.0-20230131235318-730f0225f65f/go.mod h1:B5tG69jf27ORMtjJY5Q50s6HAtmVTWCpOoRQgEWheEQ=
+github.com/numiadata/tools/pubsub v0.3.0 h1:KxQGuPSLTERXiIE4RMXh+5cuH7MYXg2raT4FFJqyN3E=
+github.com/numiadata/tools/pubsub v0.3.0/go.mod h1:B5tG69jf27ORMtjJY5Q50s6HAtmVTWCpOoRQgEWheEQ=
 github.com/nxadm/tail v1.4.4/go.mod h1:kenIhsEOeOJmVchQTgglprH7qJGnHDVpk1VPCcaMI8A=
 github.com/nxadm/tail v1.4.8 h1:nPr65rt6Y5JFSKQO7qToXr7pePgD6Gwiw05lkbyAQTE=
 github.com/nxadm/tail v1.4.8/go.mod h1:+ncqLTQzXmGhMZNUePPaPqPvBxHAIsmXswZKocGu+AU=

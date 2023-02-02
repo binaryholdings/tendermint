@@ -144,11 +144,11 @@ func eventReIndex(cmd *cobra.Command, args eventReIndexArgs) error {
 
 				for i := range b.Data.Txs {
 					tr := pubsub.TxResult{
-						Height: b.Height,
-						Index:  uint32(i),
-						Tx:     b.Data.Txs[i],
-						Result: *(r.DeliverTxs[i]),
-						Time:   e.Header.Time,
+						Height:         b.Height,
+						Index:          uint32(i),
+						Tx:             b.Data.Txs[i],
+						Result:         *(r.DeliverTxs[i]),
+						BlockTimestamp: e.Header.Time,
 					}
 
 					if err = batch.Add(&tr); err != nil {

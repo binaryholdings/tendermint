@@ -52,7 +52,7 @@ require (
 require (
 	github.com/btcsuite/btcd/btcec/v2 v2.2.1
 	github.com/btcsuite/btcd/btcutil v1.1.2
-	github.com/numiadata/tools/pubsub v0.0.0-20230131235318-730f0225f65f
+	github.com/numiadata/tools/pubsub v0.3.0
 	github.com/vektra/mockery/v2 v2.14.0
 	gonum.org/v1/gonum v0.8.2
 	google.golang.org/protobuf v1.28.2-0.20220831092852-f930b1dc76e8
