@@ -6,17 +6,14 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	dbm "github.com/tendermint/tm-db"
 
-	abcitypes "github.com/tendermint/tendermint/abci/types"
+	"github.com/numiadata/tools/pubsub"
+
 	tmcfg "github.com/tendermint/tendermint/config"
 	"github.com/tendermint/tendermint/libs/progressbar"
 	"github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/state/indexer"
-	blockidxkv "github.com/tendermint/tendermint/state/indexer/block/kv"
-	"github.com/tendermint/tendermint/state/indexer/sink/psql"
 	"github.com/tendermint/tendermint/state/txindex"
-	"github.com/tendermint/tendermint/state/txindex/kv"
 	"github.com/tendermint/tendermint/types"
 )
 
@@ -98,25 +95,7 @@ func loadEventSinks(cfg *tmcfg.Config) (indexer.BlockIndexer, txindex.TxIndexer,
 	switch strings.ToLower(cfg.TxIndex.Indexer) {
 	case "null":
 		return nil, nil, errors.New("found null event sink, please check the tx-index section in the config.toml")
-	case "psql":
-		conn := cfg.TxIndex.PsqlConn
-		if conn == "" {
-			return nil, nil, errors.New("the psql connection settings cannot be empty")
-		}
-		es, err := psql.NewEventSink(conn, cfg.ChainID())
-		if err != nil {
-			return nil, nil, err
-		}
-		return es.BlockIndexer(), es.TxIndexer(), nil
-	case "kv":
-		store, err := dbm.NewDB("tx_index", dbm.BackendType(cfg.DBBackend), cfg.DBDir())
-		if err != nil {
-			return nil, nil, err
-		}
 
-		txIndexer := kv.NewTxIndex(store)
-		blockIndexer := blockidxkv.New(dbm.NewPrefixDB(store, []byte("block_events")))
-		return blockIndexer, txIndexer, nil
 	default:
 		return nil, nil, fmt.Errorf("unsupported event sink type: %s", cfg.TxIndex.Indexer)
 	}
@@ -159,16 +138,17 @@ func eventReIndex(cmd *cobra.Command, args eventReIndexArgs) error {
 				ResultEndBlock:   *r.EndBlock,
 			}
 
-			var batch *txindex.Batch
+			var batch *pubsub.Batch
 			if e.NumTxs > 0 {
-				batch = txindex.NewBatch(e.NumTxs)
+				batch = pubsub.NewBatch(e.NumTxs)
 
 				for i := range b.Data.Txs {
-					tr := abcitypes.TxResult{
+					tr := pubsub.TxResult{
 						Height: b.Height,
 						Index:  uint32(i),
 						Tx:     b.Data.Txs[i],
 						Result: *(r.DeliverTxs[i]),
+						Time:   e.Header.Time,
 					}
 
 					if err = batch.Add(&tr); err != nil {
